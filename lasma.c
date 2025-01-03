@@ -11,10 +11,31 @@ enum {
     a4, b4, c4, d4, e4, f4, g4, h4,
     a3, b3, c3, d3, e3, f3, g3, h3,
     a2, b2, c2, d2, e2, f2, g2, h2,
-    a1, b1, c1, d1, e1, f1, g1, h1
+    a1, b1, c1, d1, e1, f1, g1, h1, no_sq
 };
+enum{ P, N, B, R, Q, K, p, n, b, r, q, k};
 enum{ rook , bishop };
-enum{ white, black };
+enum{ white, black, both };
+enum{wk = 1 , wq = 2, bk = 4, bq = 8};
+// ASCII Pieces
+char ascii_pieces[12] = "PNBRQKpnbrq";
+
+char * unicode_pieces[12] ={"♙","♘","♗","♖","♕","♔","♟","♞","♝","♖","♛","♚"};
+
+int char_pieces[]={
+    ['P'] = P,
+    ['N'] = N,
+    ['B'] = B,
+    ['R'] = R,
+    ['Q'] = Q,
+    ['K'] = K,
+    ['p'] = p,
+    ['n'] = n,
+    ['b'] = b,
+    ['r'] = r,
+    ['q'] = q,
+    ['k'] = k,
+};
 const char * square_to_coordinates[] = {
 "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
@@ -26,14 +47,20 @@ const char * square_to_coordinates[] = {
 "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"
 };
 
+U64 bitboards[12];
+U64 occupancies[3];
+int side = -1;
+int enpassant = no_sq;
+int castle;
+
 /*********************************\
  ==================================
         Bit manipulations
  ==================================
  \*********************************/
- #define get_bit(bitboard,square) (bitboard & (1ULL << square))
- #define set_bit(bitboard,square) (bitboard |= (1ULL << square))
- #define pop_bit(bitboard,square) (get_bit(bitboard,square) ? bitboard ^= (1ull << square) : 0)
+ #define get_bit(bitboard,square) ((bitboard) & (1ULL << (square)))
+ #define set_bit(bitboard,square) ((bitboard) |= (1ULL << (square)))
+ #define pop_bit(bitboard,square) ((bitboard) &= -(1ULL << (square)))
 
 //Count bits within a bitboard
 static inline int count_bits(U64 bitboard)
@@ -63,6 +90,36 @@ static inline int get_ls1b_index(U64 biitboard)
         Input & output
  ==================================
  \*********************************/
+
+ void print_board()
+ {
+    for(int rank = 0 ; rank < 8 ; rank++)
+    {
+        for(int file = 0 ; file < 8 ; file++)
+        {
+            int square = rank * 8 + file;
+            if(!file) printf("%d",8-rank);
+            int piece = -1 ;
+            for(int bb_piece = P ; bb_piece <= k ; bb_piece++)
+            {
+                if(get_bit(bitboards[bb_piece], square))
+                    piece = bb_piece;
+            }
+            printf(" %s", (piece == - 1) ? "." : unicode_pieces[piece]);
+        }
+        printf("\n");
+    }
+    printf("\n  a b c d e f g h\n\n");
+
+    printf("side       %s\n", (side==1) ? "White" : "Black");
+    printf("Enpassant    %s\n", (enpassant != no_sq) ? square_to_coordinates[enpassant] : "no");
+    printf("Castling    %c%c%c%c\n", (castle & wk) ? 'K' : '-'
+                                   , (castle & wq) ? 'Q' : '-'
+                                   , (castle & bk) ? 'k' : '-'
+                                   , (castle & bq) ? 'q' : '-'
+                                    );
+
+ }
 
 void print_bitboard(U64 bitboard)
 {
@@ -521,6 +578,8 @@ void init_leapers_attacks(){
     }
 }
 
+
+
 /*********************************\
  ==================================
            Random Functions
@@ -659,7 +718,7 @@ void init_sliders_attacks(int bishop)
 
         U64 attack_mask = bishop ? bishop_masks[square] : rook_masks[square];
         int relevant_bits_count = count_bits(attack_mask);
-        int occupancy_indices = (1<<relevant_bits_count);
+        int occupancy_indices = (1 << relevant_bits_count);
         for(int index = 0 ; index < occupancy_indices ; index++)
         {
              U64 occupancy = set_occupancy(index,relevant_bits_count, attack_mask);
@@ -670,7 +729,7 @@ void init_sliders_attacks(int bishop)
             }
             else{
                 int magic_index = (occupancy * rook_magic_numbers[square]) >> (64 - rook_relevant_bits[square]);
-                rook_attacks[square][magic_index] = mask_bishop_attacks_on_the_fly(square,occupancy);
+                rook_attacks[square][magic_index] = mask_rook_attacks_on_the_fly(square,occupancy);
             }
         }
     }
@@ -704,11 +763,13 @@ static inline U64 get_rook_attacks(int square, U64 occupancy)
  ==================================
  \*********************************/
 
+
 void init_all()
 {
     init_leapers_attacks();
-    init_sliders_attacks(bishop);
-    init_sliders_attacks(rook);
+    init_sliders_attacks(1);
+    init_sliders_attacks(0);
+
 }
 /*********************************\
  ==================================
@@ -719,11 +780,8 @@ void init_all()
 int main()
 {
     init_all();
-
-    U64 occupancy = 0ULL;
-    print_bitboard(occupancy);
-
-    print_bitboard(get_rook_attacks(d4, occupancy));
+    set_bit(bitboards[P],e2);
+    print_board();
 
     return 0;
 }
